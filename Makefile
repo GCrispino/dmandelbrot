@@ -13,7 +13,7 @@ else
 	CFLAGS+= -fopenmp
 endif
 IDIR=lib
-LIBS=-L/usr/lib/openmpi -lmpi
+LIBS=-L/usr/lib/openmpi -lmpi -lmpi_cxx
 _DEPS=mandelbrot.cuh
 DEPS=$(patsubst %,$(IDIR)/%,$(_DEPS))
 MACROS=
