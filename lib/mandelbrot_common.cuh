@@ -17,10 +17,10 @@ namespace mandelbrot{
      * Computes z for max iteration number m, and returns the j
      * 	norm(z) > 2
      */
-    unsigned __DEVICE__ __HOST__ mandelbrot_c(complex<REAL> c, unsigned m){
+    unsigned __DEVICE__ __HOST__ mandelbrot_c(complex<REAL_TYPE> c, unsigned m){
         
-        complex<REAL> z(0,0);
-        REAL norm_z;
+        complex<REAL_TYPE> z(0,0);
+        REAL_TYPE norm_z;
 
         for (unsigned j = 1;j < m;++j){
             z = pow(z,2) + c;

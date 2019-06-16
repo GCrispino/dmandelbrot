@@ -6,14 +6,14 @@ DEFAULT_REAL=float
 ifndef REAL
 	REAL=$(DEFAULT_REAL)
 endif
-CFLAGS=-I$(IDIR) --std=c++11 -DREAL=$(REAL)
+CFLAGS=-I$(IDIR) --std=c++11 -DREAL_TYPE=$(REAL)
 ifeq ($(CC), nvcc)
 	CFLAGS+= -Xcompiler -fopenmp
 else
 	CFLAGS+= -fopenmp
 endif
 IDIR=lib
-LIBS=
+LIBS=-L/usr/lib/openmpi -lmpi
 _DEPS=mandelbrot.cuh
 DEPS=$(patsubst %,$(IDIR)/%,$(_DEPS))
 MACROS=
