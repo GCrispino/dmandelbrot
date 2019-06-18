@@ -87,24 +87,16 @@ namespace mandelbrot{
 
     int * get_boundaries(int w, int h, int rank, int n_procs, int block_size, bool print = false){
         int 
-            // n_blocks_per_line = w / block_size,
             n_blocks_per_column = h / block_size;
         int
             block_line = (rank - 1) % n_blocks_per_column,
-            // block_column = rank % n_blocks_per_line,
-            // start_x = block_size * block_column,
             start_x = 0,
             end_x = w - 1,
-            // end_x = start_x + block_size < w - 1 ? start_x + block_size : w - 1,
             start_y = block_size * block_line,
-            // start_y = 0,
-            // end_y = h - 1,
             end_y = rank == n_procs ? h - 1 : start_y + block_size - 1,
-            // end_y = start_y + block_size - 1 < h - 1 ? start_y + block_size - 1 : h - 1,
             *res = (int *) malloc(4 * sizeof(int));
 
         if (print){
-            printf("\tn_procs: %d\n",n_procs);
             printf("\trank %d, x: (%d, %d), y: (%d, %d)\n", rank, start_x, end_x, start_y, end_y);
         }
         res[0] = start_x;
@@ -129,15 +121,13 @@ namespace mandelbrot{
         unsigned rank, unsigned n_procs,
         complex<REAL_TYPE> c0, complex<REAL_TYPE> c1,
         REAL_TYPE delta_x, REAL_TYPE delta_y,
-        unsigned w, unsigned h, unsigned m,
-        unsigned *table
+        unsigned w, unsigned h, unsigned m
     ){
 
         unsigned block_size = get_block_size(w, h, n_procs);
-        // printf("block_size %d\n",block_size);
-        int *bound = get_boundaries(w, h, rank, n_procs, block_size, true);
+        int *bound = get_boundaries(w, h, rank, n_procs, block_size, false);
         int start_y = bound[2], end_y = bound[3];
-        unsigned local_h = end_y - start_y;
+        unsigned local_h = end_y - start_y + 1;
         unsigned local_table_size = w * local_h;
         unsigned *local_table = new unsigned[local_table_size];
         complex<REAL_TYPE> local_c0(c0.real(), c0.imag() + start_y * delta_y), local_c1(c1.real(), c1.imag() + start_y * delta_y);
@@ -149,7 +139,6 @@ namespace mandelbrot{
             w, local_h, m, local_table
         );
 
-        printf("\tRank: %d will send %d!\n", rank, local_table_size);
         MPI_Send(
             local_table,
             local_table_size,
@@ -158,6 +147,7 @@ namespace mandelbrot{
             0,
             MPI_COMM_WORLD
         );
-        printf("\tRank: %d sent data!\n", rank);
+
+        delete[] local_table;
     }
 }

@@ -132,7 +132,6 @@ int main(int argc, char **argv){
     const mandelbrot::exec_mode ex = args.ex;
     const unsigned w = args.w, h = args.h, m = 250;
 
-    unsigned *table = new unsigned[w * h];
 
     complex<REAL_TYPE> c0(args.c0),c1(args.c1);
 
@@ -144,7 +143,15 @@ int main(int argc, char **argv){
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
+    world_size = world_size > h + 1 ? h + 1 : world_size;
+
+    if (world_rank > world_size - 1){
+        MPI_Finalize();
+        exit(0);
+    }
+
     if (world_rank == 0){
+        unsigned *table = new unsigned[w * h];
         unsigned block_size = mandelbrot::get_block_size(w, h, world_size - 1);
 
         for (unsigned i = 1; i < world_size; ++i){
@@ -154,10 +161,8 @@ int main(int argc, char **argv){
             unsigned local_table_size = w * local_h;
             unsigned offset = block_size * w * (i - 1);
 
-            printf("\t%d - start_y: %d, end_y: %d, start_x: %d, end_x: %d, block_size: %d, table_size: %d, offset: %d\n", i, start_y, end_y, start_x, end_x, block_size, local_table_size, offset);
-            printf("\tRank: %d will receive %d!\n", i, local_table_size);
             MPI_Recv(
-                table + offset, // TODO: Calc table offset according to rank
+                table + offset,
                 local_table_size,
                 MPI_UNSIGNED,
                 i,
@@ -165,12 +170,12 @@ int main(int argc, char **argv){
                 MPI_COMM_WORLD,
                 MPI_STATUS_IGNORE
             );
-            printf("\tRank: %d received data!\n", i);
         }
             
         png::image< png::rgb_pixel > image = create_image(w,h,table);
         image.write(args.output_path);
 
+        delete[] table;
     }
     else{
         d_mandelbrot(
@@ -178,11 +183,10 @@ int main(int argc, char **argv){
             world_rank, world_size - 1,
             c0, c1,
             delta_x, delta_y,
-            w, h, m, table
+            w, h, m
         );
     }
 
-    delete[] table;
 
     MPI_Finalize();
 
