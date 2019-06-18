@@ -32,22 +32,22 @@ $(ODIR)/%.o: %.cpp $(DEPS)
 $(ODIR)/%.o: %.cu $(DEPS)
 	$(CC) -c -o $@ -x $(LANG) $< $(CFLAGS) `libpng-config --cflags`
 
-all: makedir mbrot
+all: makedir dmbrot
 
-mbrot: $(OBJ)
+dmbrot: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) `libpng-config --ldflags`
 
 #openmp: CC := g++
 #openmp: CFLAGS += -fopenmp
-#openmp: mbrot
+#openmp: dmbrot
 
 #cuda: CC := nvcc
 #openmp: MACROS += __CUDACC__
-#cuda: mbrot
+#cuda: dmbrot
 
 
 debug: CFLAGS += -DDEBUG -g
-debug: mbrot
+debug: dmbrot
 
 makedir:
 	mkdir -p obj
