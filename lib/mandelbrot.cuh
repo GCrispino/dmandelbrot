@@ -55,13 +55,6 @@ namespace mandelbrot{
         unsigned *table
     ){
 
-        std::cout << "Delta x: " << delta_x << std::endl;
-        std::cout << "Delta y: " << delta_y << std::endl;
-
-        std::cout << "c0: (" << c0.real() << ',' << c0.imag() << ")" << std::endl;
-        std::cout << "c1: (" << c1.real() << ',' << c1.imag() << ")" << std::endl;
-        std::cout << "Exec mode: " << ex << std::endl;
-
         switch(ex){
             case exec_mode::CPU:
                 mandelbrot_cpu(
@@ -131,6 +124,11 @@ namespace mandelbrot{
         unsigned local_table_size = w * local_h;
         unsigned *local_table = new unsigned[local_table_size];
         complex<REAL_TYPE> local_c0(c0.real(), c0.imag() + start_y * delta_y), local_c1(c1.real(), c1.imag() + start_y * delta_y);
+
+
+        std::cout << rank << " - c0: (" << local_c0.real() << ',' << local_c0.imag() << ")" << std::endl;
+        std::cout << rank << " - c1: (" << local_c1.real() << ',' << local_c1.imag() << ")" << std::endl;
+
 
         mandelbrot::mandelbrot(
             ex, n_threads,

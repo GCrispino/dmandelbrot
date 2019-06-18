@@ -36,14 +36,13 @@ void print_table(unsigned w, unsigned h, unsigned ** table){
 
 png::image<png::rgb_pixel> create_image(unsigned w, unsigned h, unsigned *table){
 
-    printf("w = %d, h = %d\n",w,h);
     png::image< png::rgb_pixel > image(w, h);
 
     #pragma omp parallel for
     for (png::uint_32 y = 0; y < image.get_height(); ++y)
     {
-        for (png::uint_32 x = 0; x < image.get_width(); ++x)
-        {
+       for (png::uint_32 x = 0; x < image.get_width(); ++x)
+       {
             if (table[y * w + x] == 0){
                 image[y][x] = png::rgb_pixel(30, 30, 30);
             }
@@ -113,8 +112,6 @@ struct params parse_args(int argc, char **argv){
 
     const complex<REAL_TYPE> c0(c0_real, c0_imag), c1(c1_real, c1_imag);
 
-    std::cout << c0 << ' ' << c1 << ' ' << w << ' ' << h << std::endl;
-
     return params(
         c0,c1,
         w, h, n_threads, get_exec_mode(argv[7]),argv[9]
@@ -127,23 +124,40 @@ int main(int argc, char **argv){
 
     MPI_Init(&argc, &argv);
 
+    int world_size, world_rank;
+
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
     params args = parse_args(argc, argv);
 
     const mandelbrot::exec_mode ex = args.ex;
     const unsigned w = args.w, h = args.h, m = 250;
-
 
     complex<REAL_TYPE> c0(args.c0),c1(args.c1);
 
     const REAL_TYPE delta_x = (c1.real() - c0.real()) / w;
     const REAL_TYPE delta_y = (c1.imag() - c0.imag()) / h;
 
-    int world_size, world_rank;
+    if(world_size > h + 1){
+        if (world_rank == 0){
+            std::cerr << "Number of processes cannot be higher than image height + 1!" << std::endl;
+            std::cerr << "Setting number of processes to h + 1 = " << h + 1 << std::endl;
+        }
 
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+        world_size = h + 1; 
+    }
 
     world_size = world_size > h + 1 ? h + 1 : world_size;
+
+    if (world_size == 1){
+        if (world_rank == 0){
+            std::cerr << "Number of processes needs to be at least 2! Exiting..." << std::endl;
+        }
+
+        MPI_Finalize();
+        exit(1);
+    }
 
     if (world_rank > world_size - 1){
         MPI_Finalize();
@@ -151,6 +165,14 @@ int main(int argc, char **argv){
     }
 
     if (world_rank == 0){
+        std::cout << "Exec mode: " << ex << std::endl;
+
+        std::cout << "c0: (" << c0.real() << ',' << c0.imag() << ")" << std::endl;
+        std::cout << "c1: (" << c1.real() << ',' << c1.imag() << ")" << std::endl;
+        std::cout << "w: " << w << ", h: " << h << std::endl;
+        std::cout << "Delta x: " << delta_x << std::endl;
+        std::cout << "Delta y: " << delta_y << std::endl;
+
         unsigned *table = new unsigned[w * h];
         unsigned block_size = mandelbrot::get_block_size(w, h, world_size - 1);
 
