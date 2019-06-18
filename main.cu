@@ -178,7 +178,7 @@ int main(int argc, char **argv){
 
         for (unsigned i = 1; i < world_size; ++i){
             int *bound = mandelbrot::get_boundaries(w, h, i, world_size - 1, block_size);
-            int start_x = bound[0], end_x = bound[1], start_y = bound[2], end_y = bound[3];
+            int start_y = bound[2], end_y = bound[3];
             unsigned local_h = end_y - start_y + 1;
             unsigned local_table_size = w * local_h;
             unsigned offset = block_size * w * (i - 1);
