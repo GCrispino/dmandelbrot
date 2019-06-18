@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <functional>
 #include <png++/image.hpp>
 #include <mpi.h>
 
@@ -23,16 +24,6 @@
 
 #include "mandelbrot.cuh"
 
-
-void print_table(unsigned w, unsigned h, unsigned ** table){
-    for (unsigned i = 0;i < h; ++i){
-        for (unsigned j = 0;j < w; ++j){
-            std::cout << table[i * h + j]  << ' ';
-        }
-
-        std::cout << std::endl;
-    }
-}
 
 png::image<png::rgb_pixel> create_image(unsigned w, unsigned h, unsigned *table){
 
@@ -119,31 +110,109 @@ struct params parse_args(int argc, char **argv){
 }
 
 
+template <class R, class ...A>
+R do_master(int rank, std::function<R(A...)> fn, std::function<R(A...)> fn_else, A... args){
+    if (rank == 0){ // master
+        return fn(args...);
+    }
+
+    return fn_else(args...); // slave
+}
+
+void master_work(
+    params args,
+    int rank, int n_procs,
+    REAL_TYPE delta_x, REAL_TYPE delta_y,
+    unsigned m
+){
+    COMPLEX::complex<REAL_TYPE> c0(args.c0),c1(args.c1);
+    const unsigned w = args.w, h = args.h;
+    std::cout << "Exec mode: " << args.ex << std::endl;
+
+    std::cout << "c0: (" << c0.real() << ',' << c0.imag() << ")" << std::endl;
+    std::cout << "c1: (" << c1.real() << ',' << c1.imag() << ")" << std::endl;
+    std::cout << "w: " << w << ", h: " << h << std::endl;
+    std::cout << "Delta x: " << delta_x << std::endl;
+    std::cout << "Delta y: " << delta_y << std::endl;
+
+    unsigned *table = new unsigned[w * h];
+    unsigned block_size = mandelbrot::get_block_size(w, h, n_procs - 1);
+
+    for (unsigned i = 1; i < n_procs; ++i){
+        int *bound = mandelbrot::get_boundaries(w, h, i, n_procs - 1, block_size);
+        int start_y = bound[2], end_y = bound[3];
+        unsigned local_h = end_y - start_y + 1;
+        unsigned local_table_size = w * local_h;
+        unsigned offset = block_size * w * (i - 1);
+
+        MPI_Recv(
+            table + offset,
+            local_table_size,
+            MPI_UNSIGNED,
+            i,
+            0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    }
+        
+    png::image< png::rgb_pixel > image = create_image(w,h,table);
+    image.write(args.output_path);
+
+    delete[] table;
+}
+
+
+void slave_work(
+    params args,
+    int rank, int n_procs,
+    REAL_TYPE delta_x, REAL_TYPE delta_y,
+    unsigned m
+){
+    d_mandelbrot(
+        args.ex, args.n_threads,
+        rank, n_procs - 1,
+        args.c0, args.c1,
+        delta_x, delta_y,
+        args.w, args.h, m
+    );
+}
+
 int main(int argc, char **argv){
     using COMPLEX::complex;
+    using std::function;
 
+    // MPI Initialization
+    // ----------------------------------------------
     MPI_Init(&argc, &argv);
 
     int world_size, world_rank;
 
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    // ----------------------------------------------
 
     params args = parse_args(argc, argv);
 
-    const mandelbrot::exec_mode ex = args.ex;
-    const unsigned w = args.w, h = args.h, m = 250;
+    unsigned w = args.w, h = args.h, m = 250;
 
     complex<REAL_TYPE> c0(args.c0),c1(args.c1);
 
-    const REAL_TYPE delta_x = (c1.real() - c0.real()) / w;
-    const REAL_TYPE delta_y = (c1.imag() - c0.imag()) / h;
+    REAL_TYPE delta_x = (c1.real() - c0.real()) / w;
+    REAL_TYPE delta_y = (c1.imag() - c0.imag()) / h;
+
+    function <void(unsigned)>dummy = [](unsigned){};
 
     if(world_size > h + 1){
-        if (world_rank == 0){
-            std::cerr << "Number of processes cannot be higher than image height + 1!" << std::endl;
-            std::cerr << "Setting number of processes to h + 1 = " << h + 1 << std::endl;
-        }
+        function<void(unsigned)> proc_number_err_fn = function<void(unsigned)>(
+            [](unsigned h){
+                std::cerr << "Number of processes cannot be higher than image height + 1!" << std::endl;
+                std::cerr << "Setting number of processes to h + 1 = " << h + 1 << std::endl;
+            }
+        );
+
+        do_master(
+            world_rank,
+            proc_number_err_fn,
+            dummy, h
+        );
 
         world_size = h + 1; 
     }
@@ -151,9 +220,17 @@ int main(int argc, char **argv){
     world_size = world_size > h + 1 ? h + 1 : world_size;
 
     if (world_size == 1){
-        if (world_rank == 0){
-            std::cerr << "Number of processes needs to be at least 2! Exiting..." << std::endl;
-        }
+        function<void(unsigned)> proc_number_err_fn = function<void(unsigned)>(
+            [](unsigned h){
+                std::cerr << "Number of processes needs to be at least 2! Exiting..." << std::endl;
+            }
+        );
+
+        do_master(
+            world_rank,
+            proc_number_err_fn,
+            dummy, h
+        );
 
         MPI_Finalize();
         exit(1);
@@ -163,52 +240,20 @@ int main(int argc, char **argv){
         MPI_Finalize();
         exit(0);
     }
+    
+    std::function<void(
+        params, int, int,
+        REAL_TYPE, REAL_TYPE, unsigned
+    )> slave_fn = slave_work, master_fn = master_work;
 
-    if (world_rank == 0){
-        std::cout << "Exec mode: " << ex << std::endl;
-
-        std::cout << "c0: (" << c0.real() << ',' << c0.imag() << ")" << std::endl;
-        std::cout << "c1: (" << c1.real() << ',' << c1.imag() << ")" << std::endl;
-        std::cout << "w: " << w << ", h: " << h << std::endl;
-        std::cout << "Delta x: " << delta_x << std::endl;
-        std::cout << "Delta y: " << delta_y << std::endl;
-
-        unsigned *table = new unsigned[w * h];
-        unsigned block_size = mandelbrot::get_block_size(w, h, world_size - 1);
-
-        for (unsigned i = 1; i < world_size; ++i){
-            int *bound = mandelbrot::get_boundaries(w, h, i, world_size - 1, block_size);
-            int start_y = bound[2], end_y = bound[3];
-            unsigned local_h = end_y - start_y + 1;
-            unsigned local_table_size = w * local_h;
-            unsigned offset = block_size * w * (i - 1);
-
-            MPI_Recv(
-                table + offset,
-                local_table_size,
-                MPI_UNSIGNED,
-                i,
-                0,
-                MPI_COMM_WORLD,
-                MPI_STATUS_IGNORE
-            );
-        }
-            
-        png::image< png::rgb_pixel > image = create_image(w,h,table);
-        image.write(args.output_path);
-
-        delete[] table;
-    }
-    else{
-        d_mandelbrot(
-            ex, args.n_threads,
-            world_rank, world_size - 1,
-            c0, c1,
-            delta_x, delta_y,
-            w, h, m
-        );
-    }
-
+    // do master and slave main work depending on rank
+    do_master(
+        world_rank,
+        master_fn,
+        slave_fn,
+        args, world_rank, world_size,
+        delta_x, delta_y, m
+    );
 
     MPI_Finalize();
 
