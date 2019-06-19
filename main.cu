@@ -179,14 +179,23 @@ int main(int argc, char **argv){
     using COMPLEX::complex;
     using std::function;
 
+    int error;
+
     // MPI Initialization
     // ----------------------------------------------
-    MPI_Init(&argc, &argv);
+    if (error = MPI_Init(&argc, &argv)){
+        std::cout << "Error in MPI_Init: " << error << std::endl;
+    }
+
 
     int world_size, world_rank;
+    if (error = MPI_Comm_size(MPI_COMM_WORLD, &world_size)){
+        std::cout << "Error in MPI_Comm_size: " << error << std::endl;
+    }
 
-    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+    if (error = MPI_Comm_rank(MPI_COMM_WORLD, &world_rank)){
+        std::cout << "Error in MPI_Comm_rank: " << error << std::endl;
+    }
     // ----------------------------------------------
 
     params args = parse_args(argc, argv);
@@ -232,12 +241,18 @@ int main(int argc, char **argv){
             dummy, h
         );
 
-        MPI_Finalize();
+
+        if (error = MPI_Finalize()){
+            std::cout << "Error in MPI_Finalize: " << error << std::endl;
+        }
+
         exit(1);
     }
 
     if (world_rank > world_size - 1){
-        MPI_Finalize();
+        if (error = MPI_Finalize()){
+            std::cout << "Error in MPI_Finalize: " << error << std::endl;
+        }
         exit(0);
     }
     
@@ -255,7 +270,9 @@ int main(int argc, char **argv){
         delta_x, delta_y, m
     );
 
-    MPI_Finalize();
+    if (error = MPI_Finalize()){
+        std::cout << "Error in MPI_Finalize: " << error << std::endl;
+    }
 
     return 0;
 }
