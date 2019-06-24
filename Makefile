@@ -14,7 +14,7 @@ else
 endif
 IDIR=lib
 LIBS=-L/usr/lib/openmpi -lmpi -lmpi_cxx
-_DEPS=mandelbrot.cuh
+_DEPS=*.cu*
 DEPS=$(patsubst %,$(IDIR)/%,$(_DEPS))
 MACROS=
 ifeq ($(CC), nvcc)
