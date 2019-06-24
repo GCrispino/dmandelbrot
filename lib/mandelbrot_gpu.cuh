@@ -79,8 +79,8 @@ namespace mandelbrot{
             // =========================================================
 
         
-            unsigned blocks_per_grid = ceil((w * h) / n_threads);
-            mbrot_gpu<<< blocks_per_grid , n_threads >>>(
+            unsigned blocks_per_grid = ceil((w * h) / n_threads) + 1;
+            mbrot_gpu<<< blocks_per_grid, n_threads >>>(
                d_c0, d_c1,
                d_delta_x, d_delta_y,
                d_w, d_h, d_m,
